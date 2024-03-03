@@ -25,14 +25,17 @@ fn main(){
 fn handle_client(mut stream: TcpStream) {
     let mut buf = [0; 512];
     loop {
-        let byte_read = stream.read(&mut buf).unwrap();
+        let byte_read = stream.read(&mut buf).unwrap();     // used to calculate length of incoming string
+
         if byte_read == 0 {
             return;
         }
-        let request = String::from_utf8_lossy(&buf[..]);
+        let request = String::from_utf8_lossy(&buf[..]);    // request is the incoming string from client.
+
+        // Performing regex : spiting our string by "\r\n".
         request.split("\r\n").for_each(|line| {
-            if line == "ping" {
-                stream.write(b"+PONG\r\n").unwrap();
+            if line == "ping" {     // matching ping with line
+                stream.write(b"+PONG\r\n").unwrap();    // writing it to the client.
             }
         });
     }
