@@ -10,7 +10,7 @@ fn main(){
             Ok(stream) => {
                 // println!("{:?}",stream); // print this to know about the TcpStream details.
                 println!("\n[+] Client has connected to server!");  // simple connected message will pop on server side.
-                handle_client(&mut stream);  // calling our function to handel our client
+                handle_client(stream);  // calling our function to handel our client
                 println!("[+] Respond Successfully!");
             }
             Err(e) => {
