@@ -49,7 +49,6 @@ fn handle_client(mut stream: TcpStream) {
         // println!("message from client : {:?}", buf);    // this is the ASCII value of an array buf, that stores the client mess.
         
         println!("[+] Responding to the client!");
-        
         for _i in 0..cnt {
             stream.write_all(&_message[0..7]).expect("Failed to write to client"); // this statement used to respond the Client.
         }
