@@ -10,7 +10,7 @@ fn main(){
             Ok(stream) => {
                 // println!("{:?}",stream); // print this to know about the TcpStream details.
                 println!("\n[+] Client has connected to server!");  // simple connected message will pop on server side.
-                handle_client(stream);  // calling our function to handel our client
+                handle_client(&mut stream);  // calling our function to handel our client
                 println!("[+] Respond Successfully!");
             }
             Err(e) => {
@@ -23,35 +23,17 @@ fn main(){
 
 // Create a function to handle our client
 fn handle_client(mut stream: TcpStream) {
-
-    let mut buf = [0; 512]; // Create an array of size 512, with default value '0', to store the incoming message that are comes from client.   NOTE : we take 512 max size, because as redis default size(it can be change manually) is 512mb to handel response from user.
-    let _message = b"+PONG\r\n";    // Message by server to client . This is an array of string.
-    // using loop to handel specific user until we respond them.
+    let mut buf = [0; 512];
     loop {
-        let bytes_read = stream.read(&mut buf).expect("Failed to read from client");    // this is used to read message from client
-
-        // println!("[+] Total bytes are: {}",bytes_read);   // this is the number of bytes of string.
-        // println!("[+] buf ASCII Values: {:?}", &buf[0..bytes_read]);   // this is the number of bytes of string.
-
-        // loop for counting how many time we need to respond PONG
-        let mut cnt = 0;    // making a counter to find how many \n has the user message.
-        for _i in 0..bytes_read {
-            if 10 == buf[_i] {
-                cnt += 1;
-            }
-        }
-        // println!("counter: {} ", cnt);
-        
-        // this states that if we have not received anything from the client then we returns.
-        if bytes_read == 0 {
+        let byte_read = stream.read(&mut buf).unwrap();
+        if byte_read == 0 {
             return;
         }
-        // println!("message from client : {:?}", buf);    // this is the ASCII value of an array buf, that stores the client mess.
-        
-        println!("[+] Responding to the client!");
-        for _i in 0..cnt {
-            stream.write_all(&_message[0..7]).expect("Failed to write to client"); // this statement used to respond the Client.
-        }
-        
+        let request = String::from_utf8_lossy(&buf[..]);
+        request.split("\r\n").for_each(|line| {
+            if line == "ping" {
+                stream.write(b"+PONG\r\n").unwrap();
+            }
+        });
     }
 }
