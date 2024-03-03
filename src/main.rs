@@ -25,7 +25,7 @@ fn main(){
 fn handle_client(mut stream: TcpStream) {
 
     let mut buf = [0; 512]; // Create an array of size 512, with default value '0', to store the incoming message that are comes from client.   NOTE : we take 512 max size, because as redis default size(it can be change manually) is 512mb to handel response from user.
-    let _message = b"Hello Client!!";    // Message by server to client . This is an array of string.
+    let _message = b"+PONG\r\n";    // Message by server to client . This is an array of string.
     // using loop to handel specific user until we respond them.
     loop {
         let bytes_read = stream.read(&mut buf).expect("Failed to read from client");    // this is used to read message from client
