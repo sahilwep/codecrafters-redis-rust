@@ -29,9 +29,19 @@ fn handle_client(mut stream: TcpStream) {
     // using loop to handel specific user until we respond them.
     loop {
         let bytes_read = stream.read(&mut buf).expect("Failed to read from client");    // this is used to read message from client
-        
-        // println!("{bytes_read}");   // this is the number of bytes of string.
 
+        // println!("[+] Total bytes are: {}",bytes_read);   // this is the number of bytes of string.
+        // println!("[+] buf ASCII Values: {:?}", &buf[0..bytes_read]);   // this is the number of bytes of string.
+
+        // loop for counting how many time we need to respond PONG
+        let mut cnt = 0;    // making a counter to find how many \n has the user message.
+        for _i in 0..bytes_read {
+            if 10 == buf[_i] {
+                cnt += 1;
+            }
+        }
+        // println!("counter: {} ", cnt);
+        
         // this states that if we have not received anything from the client then we returns.
         if bytes_read == 0 {
             return;
@@ -39,6 +49,10 @@ fn handle_client(mut stream: TcpStream) {
         // println!("message from client : {:?}", buf);    // this is the ASCII value of an array buf, that stores the client mess.
         
         println!("[+] Responding to the client!");
-        stream.write_all(&_message[0..bytes_read]).expect("Failed to write to client"); // this statement used to respond the Client.
+        
+        for _i in 0..cnt {
+            stream.write_all(&_message[0..7]).expect("Failed to write to client"); // this statement used to respond the Client.
+        }
+        
     }
 }
