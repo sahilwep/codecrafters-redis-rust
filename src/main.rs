@@ -18,6 +18,7 @@ fn main(){
                     // everything in here runs in separate thread
                     handle_client(stream);  // calling our function to handel our client
                     println!("[+] Respond Successfully!");
+                    thread::sleep(Duration::from_millis(1));
                 }
                 Err(e) => {
                     eprint!("Server can't connect to client: {}", e);   // handling error when our server fails to connect with client.
@@ -25,6 +26,7 @@ fn main(){
             }
         }
     });
+    thread::sleep(Duration::from_millis(2));
     handel.join().unwrap(); // it will wait until our threads are over.
 }
 
