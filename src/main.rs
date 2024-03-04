@@ -1,6 +1,8 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::thread;    // using thread to make this asynchronous
+use std::thread;
+
+use bytes::buf;    // using thread to make this asynchronous
 
 fn main(){
     let listener = TcpListener::bind("127.0.0.1:6379").expect("Could not bind");    // create a listener server that listens on localhost port 6379
@@ -40,6 +42,8 @@ fn handle_client(mut stream: TcpStream) {
         request.split("\r\n").for_each(|line| {
             if line == "ping" {     // matching ping with line
                 stream.write(b"+PONG\r\n").unwrap();    // writing it to the client.
+            } else {
+                stream.write_all(&buf[0..byte_read]).unwrap();
             }
         });
     }
