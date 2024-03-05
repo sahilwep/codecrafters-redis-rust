@@ -1,55 +1,56 @@
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-use std::str;
-
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display},
+    str,
+};
+    
+    
 #[tokio::main]
 async fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
     println!("Server listening\n");
-
     loop {
-        if let Ok((socket, _)) = listener.accept().await {
-            tokio::spawn(handle_connection(socket));
-        }
+        let (socket, _) = listener.accept().await.unwrap();
+        println!("Connected to {}", socket.peer_addr().unwrap());
+        tokio::spawn(async move {
+            handle_connection(socket).await;
+        });
     }
 }
 
 async fn handle_connection(mut socket: TcpStream) {
-    if let Ok(client_addr) = socket.peer_addr() {
-        println!("Connected to {}", client_addr);
-    }
-
-    let mut buf = [0; 1024];
+    let client_addr = socket.peer_addr().unwrap();
+    println!("Connected to {client_addr}");
     loop {
+        let mut buf = [0; 1024];
         match socket.read(&mut buf).await {
-            Ok(0) => {
-                if let Ok(client_addr) = socket.peer_addr() {
-                    println!("Connection closed with {}", client_addr);
-                }
-                break;
-            }
             Err(e) => {
                 eprintln!("{:?}", e);
-                break;
+                return;
+            }
+            Ok(0) => {
+                println!("Connection closed with {client_addr}");
+                return;
             }
             Ok(n) => {
-                if let Some(request) = parse(&buf[..n]) {
-                    println!("\nREQUEST BEGIN ({})", socket.peer_addr().unwrap());
-                    println!("\nPARSING\n{}", str::from_utf8(&buf[..n]).unwrap());
-                    println!("\n{}", request);
-                    let response = handle_request(&request);
-                    if let Err(e) = socket.write_all(response.as_bytes()).await {
-                        eprintln!("Error writing response: {:?}", e);
-                        break;
-                    }
-                }
+                println!("\nREQUEST BEGIN ({client_addr})");
+                println!("\nPARSING\n{}", str::from_utf8(&buf[..n]).unwrap());
+                let parsed = parse(&buf).unwrap();
+                println!("\n{parsed}");
+                let response = handle_request(parsed);
+                socket.write_all(response.as_bytes()).await.unwrap();
             }
         }
-        println!("\nREQUEST FINISHED ({})\n", socket.peer_addr().unwrap());
+        println!("\nREQUEST FINISHED ({client_addr})\n");
     }
 }
 
-fn handle_request(request: &Request) -> String {
+
+fn handle_request(request: Request) -> String {
     match &request.command[..] {
         "PING" => simple_string("PONG"),
         "ECHO" => simple_string(&request.args[0]),
@@ -60,40 +61,56 @@ fn handle_request(request: &Request) -> String {
 const CRLF: &str = "\r\n";
 
 fn simple_string(string: &str) -> String {
-    format!("+{}{}", string, CRLF)
+    "+".to_owned() + string + CRLF
 }
 
 fn parse(message: &[u8]) -> Option<Request> {
     let mut slice = message;
-    if slice.get(0)? != &b'*' {
-        return None;
-    }
+    if slice[0] != b'*' {
+        panic!()
+    };
+    // TODO: handle identifier
+    println!("start {}", slice[0] as char);
     slice = &slice[1..];
-    if slice.is_empty() {
-        return None;
-    }
-    let array_len = slice.get(0)? - b'0';
+    // TODO: handle multi-digit length
+    println!("array len {}", slice[0] as char);
     slice = &slice[1..];
-    let mut elements: Vec<Vec<u8>> = Vec::with_capacity(array_len as usize);
+    let mut elements: Vec<Vec<u8>> = vec![];
     while !slice.is_empty() {
-        match slice.get(0)? {
-            b'\0' => break,
-            b'\r' => slice = &slice[2..],
+        match slice[0] {
+            b'\0' => {
+                break;
+            }
+            b'\r' => {
+                slice = &slice[2..];
+            }
             b'$' => {
                 slice = &slice[1..];
-                let element_len = str::from_utf8(slice.get(..2)?.as_ref())?.parse().ok()?;
+                let mut element_len: usize = 0;
+                while slice[0] != b'\r' {
+                    element_len = element_len * 10 + usize::from(slice[0] - b'0');
+                    slice = &slice[1..];
+                }
                 slice = &slice[2..];
-                let element = slice.get(..element_len)?.to_vec();
+                let element = slice[0..element_len].to_vec();
                 elements.push(element);
                 slice = &slice[element_len..];
             }
-            _ => return None,
+            _ => {
+                panic!();
+            }
         }
     }
-    Some(Request {
-        command: String::from_utf8(elements.get(0)?.to_vec()).ok()?.to_uppercase(),
-        args: elements.get(1..)?.iter().map(|x| String::from_utf8(x.to_vec()).ok()).collect::<Option<Vec<String>>>()?,
-    })
+    match elements.as_slice() {
+        [first, rest @ ..] => Some(Request {
+            command: String::from_utf8(first.to_vec()).unwrap().to_uppercase(),
+            args: rest
+                .iter()
+                .map(|x| String::from_utf8(x.to_vec()).unwrap())
+                .collect(),
+        }),
+        _ => None,
+    }
 }
 
 struct Request {
@@ -101,8 +118,9 @@ struct Request {
     args: Vec<String>,
 }
 
-impl std::fmt::Display for Request {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+impl Display for Request {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "COMMAND: {}\nARGS ({}): [{}]",
@@ -110,7 +128,7 @@ impl std::fmt::Display for Request {
             self.args.len(),
             self.args
                 .iter()
-                .fold(String::new(), |acc, x| acc + x + ", ")
+                .fold(String::new(), |acc, x| acc + &x + ", ")
         )
     }
 }
