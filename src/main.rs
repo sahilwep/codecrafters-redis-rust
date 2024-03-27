@@ -58,6 +58,7 @@ fn handle_request(request: Request) -> String {
     }
 }
 
+
 const CRLF: &str = "\r\n";
 
 fn simple_string(string: &str) -> String {
