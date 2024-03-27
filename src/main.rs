@@ -1,135 +1,159 @@
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
-};
-use std::{
-    collections::HashMap,
-    fmt::{self, Display},
-    str,
-};
-    
-    
-#[tokio::main]
-async fn main() {
-    let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
-    println!("Server listening\n");
-    loop {
-        let (socket, _) = listener.accept().await.unwrap();
-        println!("Connected to {}", socket.peer_addr().unwrap());
-        tokio::spawn(async move {
-            handle_connection(socket).await;
-        });
-    }
+use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::thread;
+
+struct ConnectionContext {
+    data_map: HashMap<String, String>,
 }
 
-async fn handle_connection(mut socket: TcpStream) {
-    let client_addr = socket.peer_addr().unwrap();
-    println!("Connected to {client_addr}");
-    loop {
-        let mut buf = [0; 1024];
-        match socket.read(&mut buf).await {
-            Err(e) => {
-                eprintln!("{:?}", e);
-                return;
-            }
-            Ok(0) => {
-                println!("Connection closed with {client_addr}");
-                return;
-            }
-            Ok(n) => {
-                println!("\nREQUEST BEGIN ({client_addr})");
-                println!("\nPARSING\n{}", str::from_utf8(&buf[..n]).unwrap());
-                let parsed = parse(&buf).unwrap();
-                println!("\n{parsed}");
-                let response = handle_request(parsed);
-                socket.write_all(response.as_bytes()).await.unwrap();
-            }
+impl ConnectionContext {
+    fn new() -> Self {
+        Self {
+            data_map: HashMap::new(),
         }
-        println!("\nREQUEST FINISHED ({client_addr})\n");
+    }
+    fn set(&mut self, key: String, value: String) {
+        self.data_map.insert(key, value);
+    }
+    fn get(&self, key: String) -> String {
+        self.data_map.get(&key).unwrap().to_string()
     }
 }
 
-
-fn handle_request(request: Request) -> String {
-    match &request.command[..] {
-        "PING" => simple_string("PONG"),
-        "ECHO" => simple_string(&request.args[0]),
-        _ => simple_string("WTF"),
+fn tokenize_command(command: &str) -> Vec<&str> {
+    let commands: Vec<&str> = command.split("\r\n").collect();
+    let mut tokens: Vec<&str> = Vec::new();
+    if commands.len() == 0 {
+        return Vec::new();
     }
-}
-
-
-const CRLF: &str = "\r\n";
-
-fn simple_string(string: &str) -> String {
-    "+".to_owned() + string + CRLF
-}
-
-fn parse(message: &[u8]) -> Option<Request> {
-    let mut slice = message;
-    if slice[0] != b'*' {
-        panic!()
-    };
-    // TODO: handle identifier
-    println!("start {}", slice[0] as char);
-    slice = &slice[1..];
-    // TODO: handle multi-digit length
-    println!("array len {}", slice[0] as char);
-    slice = &slice[1..];
-    let mut elements: Vec<Vec<u8>> = vec![];
-    while !slice.is_empty() {
-        match slice[0] {
-            b'\0' => {
-                break;
-            }
-            b'\r' => {
-                slice = &slice[2..];
-            }
-            b'$' => {
-                slice = &slice[1..];
-                let mut element_len: usize = 0;
-                while slice[0] != b'\r' {
-                    element_len = element_len * 10 + usize::from(slice[0] - b'0');
-                    slice = &slice[1..];
+    let first_token = commands[0];
+    if first_token.chars().nth(0).unwrap() == '*' {
+        let num_in_array = first_token[1..first_token.len()].parse::<i32>().unwrap();
+        if num_in_array * 2 + 1 <= commands.len() as i32 {
+            for i in (1..num_in_array * 2 + 1).step_by(2) {
+                let token_type = commands[i as usize];
+                let value = commands[i as usize + 1];
+                if token_type.chars().nth(0).unwrap() == '$' {
+                    let num_chars = token_type[1..token_type.len()].parse::<i32>().unwrap();
+                    if num_chars == value.len() as i32 {
+                        tokens.push(value);
+                    }
                 }
-                slice = &slice[2..];
-                let element = slice[0..element_len].to_vec();
-                elements.push(element);
-                slice = &slice[element_len..];
-            }
-            _ => {
-                panic!();
             }
         }
     }
-    match elements.as_slice() {
-        [first, rest @ ..] => Some(Request {
-            command: String::from_utf8(first.to_vec()).unwrap().to_uppercase(),
-            args: rest
-                .iter()
-                .map(|x| String::from_utf8(x.to_vec()).unwrap())
-                .collect(),
-        }),
-        _ => None,
+    return tokens;
+}
+
+fn make_response_str(responses: Vec<String>) -> String {
+    if responses.len() == 0 {
+        return "*0\r\n".to_string();
+    } else if responses.len() == 1 {
+        return responses[0].to_owned();
+    } else {
+        let mut str = String::new();
+        str += "*";
+        str += &responses.len().to_string();
+        str += "\r\n";
+        for resp in responses {
+            str += &resp;
+            str += "\r\n";
+        }
+        return str;
     }
 }
 
-struct Request {
-    command: String,
-    args: Vec<String>,
+
+fn handle_command(command: &str, context: &mut ConnectionContext) -> Vec<u8> {
+    let tokens = tokenize_command(command);
+    if tokens.len() == 0 {
+        return b"*0\r\n".to_vec();
+    }
+    let mut i = 0;
+    let mut responses: Vec<String> = Vec::new();
+    while i < tokens.len() {
+        let command = tokens[i].to_lowercase();
+        if command == "ping" {
+            responses.push("+PONG\r\n".to_owned());
+            i += 1;
+        } else if command == "echo" {
+            if i + 1 >= tokens.len() {
+                responses.push("*-1\r\n".to_owned());
+                i += 1;
+                continue;
+            }
+            let mut resp_str = String::new();
+            resp_str += "$";
+            resp_str += &tokens[i + 1].len().to_string();
+            resp_str += "\r\n";
+            resp_str += tokens[i + 1];
+            resp_str += "\r\n";
+            responses.push(resp_str);
+            i += 2;
+        } else if command == "set" {
+            if i + 2 >= tokens.len() {
+                responses.push("*-1\r\n".to_owned());
+                i += 1;
+                continue;
+            }
+            context.set(tokens[i + 1].to_owned(), tokens[i + 2].to_owned());
+            responses.push("+OK\r\n".to_owned());
+            i += 3;
+        } else if command == "get" {
+            println!("on get command");
+            if i + 1 >= tokens.len() {
+                responses.push("*-1\r\n".to_owned());
+                i += 1;
+                continue;
+            }
+            let value = context.get(tokens[i + 1].to_owned());
+            let mut resp_str = String::new();
+            resp_str += "$";
+            resp_str += &value.len().to_string();
+            resp_str += "\r\n";
+            resp_str += &value;
+            resp_str += "\r\n";
+            responses.push(resp_str);
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    let response_str = make_response_str(responses);
+    // println!("{}", response_str);
+    return response_str.as_bytes().to_vec();
 }
 
 
-impl Display for Request {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "COMMAND: {}\nARGS ({}): [{}]",
-            self.command,
-            self.args.len(),
-            self.args
-                .iter()
-                .fold(String::new(), |acc, x| acc + &x + ", ")
-        )
+fn handle_client(mut stream: std::net::TcpStream) {
+    let mut connection_context = ConnectionContext::new();
+    let mut buf: [u8; 1024] = [0; 1024];
+    loop {
+        let bytes_read: usize = stream.read(&mut buf).unwrap();
+        if bytes_read == 0 {
+            break;
+        }
+        let str = std::str::from_utf8(&buf[..bytes_read]).unwrap();
+        let response = handle_command(str, &mut connection_context);
+        stream.write_all(&response).unwrap();
+        stream.flush().unwrap();
+    }
+}
+
+
+fn main() {
+    let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
+    for stream in listener.incoming() {
+        match stream {
+            Ok(_stream) => {
+                thread::spawn(move || {
+                    handle_client(_stream);
+                });
+            }
+            Err(e) => {
+                println!("error: {}", e);
+            }
+        }
     }
 }
