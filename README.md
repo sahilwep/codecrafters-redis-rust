@@ -1,35 +1,23 @@
-[![progress-banner](https://backend.codecrafters.io/progress/redis/cf70fc2e-fc68-49df-91bd-5b1d153cf21e)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
+# CodeCrafters Redis Clone in Rust
 
-This is a starting point for Rust solutions to the
-["Build Your Own Redis" Challenge](https://codecrafters.io/challenges/redis).
+This repository contains my learning project, developed during my journey of learning Rust. It is a simplified clone of Redis, a popular in-memory data structure store.
 
-In this challenge, you'll build a toy Redis clone that's capable of handling
-basic commands like `PING`, `SET` and `GET`. Along the way we'll learn about
-event loops, the Redis protocol and more.
+## Overview
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+The project implements a basic Redis server that can handle a subset of Redis commands like `PING`, `ECHO`, `SET`, and `GET`. It listens for incoming TCP connections and processes commands in a format similar to the Redis protocol.
 
-# Passing the first stage
+## Features
 
-The entry point for your Redis implementation is in `src/main.rs`. Study and
-uncomment the relevant code, and push your changes to pass the first stage:
+- **PING**: Responds with `PONG`.
+- **ECHO**: Echoes back the provided message.
+- **SET**: Stores a key-value pair.
+- **GET**: Retrieves the value associated with a given key.
 
-```sh
-git add .
-git commit -m "pass 1st stage" # any msg
-git push origin master
-```
 
-That's all!
+## Running redis:
 
-# Stage 2 & beyond
-
-Note: This section is for stages 2 and beyond.
-
-1. Ensure you have `cargo (1.54)` installed locally
-1. Run `./spawn_redis_server.sh` to run your Redis server, which is implemented
+1. Ensure you have `cargo` installed locally.
+2. Run `./spawn_redis_server.sh` to run your Redis server, which is implemented
    in `src/main.rs`. This command compiles your Rust project, so it might be
    slow the first time you run it. Subsequent runs will be fast.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+3. use `redis-cli` tool to intact.

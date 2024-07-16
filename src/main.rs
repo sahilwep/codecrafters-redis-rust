@@ -92,6 +92,7 @@ fn handle_command(command: &str, context: &mut ConnectionContext) -> Vec<u8> {
             responses.push(resp_str);
             i += 2;
         } else if command == "set" {
+            println!("Set command called");
             if i + 2 >= tokens.len() {
                 responses.push("*-1\r\n".to_owned());
                 i += 1;
@@ -101,7 +102,7 @@ fn handle_command(command: &str, context: &mut ConnectionContext) -> Vec<u8> {
             responses.push("+OK\r\n".to_owned());
             i += 3;
         } else if command == "get" {
-            println!("on get command");
+            println!("get command called");
             if i + 1 >= tokens.len() {
                 responses.push("*-1\r\n".to_owned());
                 i += 1;
